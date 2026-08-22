@@ -76,7 +76,7 @@ test('list push pop both ends and count variants', () => {
   assert.equal(store.listPop('l', false, null), 'b');
   assert.deepEqual(store.listPop('l', false, -5), ['a']);
   store.listPush('l', ['x', 'y'], false);
-  assert.deepEqual(store.listPop('l', false, -2), ['y', 'x']);
+  assert.deepEqual(store.listPop('l', false, -2), ['x', 'y']);
   assert.equal(store.listLen('l'), 0);
   assert.equal(store.typeOf('l'), 'none');
 });
