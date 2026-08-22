@@ -16,6 +16,6 @@
     "start": "node bin/kvhearth.mjs",
     "cli": "node bin/kvhearth-cli.mjs",
     "bench": "node bin/kvhearth-bench.mjs",
-    "test": "node --test test/"
+    "test": "node --test"
   }
 }
