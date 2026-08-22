@@ -1,0 +1,21 @@
+{
+  "name": "kvhearth",
+  "version": "0.1.0",
+  "description": "In-memory key-value database with durable persistence and a hand-typable line-oriented text protocol",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "bin": {
+    "kvhearth": "./bin/kvhearth.mjs",
+    "kvhearth-cli": "./bin/kvhearth-cli.mjs",
+    "kvhearth-bench": "./bin/kvhearth-bench.mjs"
+  },
+  "scripts": {
+    "start": "node bin/kvhearth.mjs",
+    "cli": "node bin/kvhearth-cli.mjs",
+    "bench": "node bin/kvhearth-bench.mjs",
+    "test": "node --test test/"
+  }
+}
