@@ -54,6 +54,30 @@ function numberOption(value, name, minimum, fallback) {
   return n
 }
 
+async function probeServer(ClientClass, { host, port }) {
+  try {
+    const client = new ClientClass({ host, port })
+    await client.connect()
+    const persistenceReply = await client.cmd(['INFO', 'persistence'])
+    const serverReply = await client.cmd(['INFO', 'server'])
+    const persistenceText = persistenceReply.data ? persistenceReply.data.toString('latin1') : ''
+    const serverText = serverReply.data ? serverReply.data.toString('latin1') : ''
+    await client.end()
+    return {
+      appendFsync: matchInfoField(persistenceText, 'append_fsync') ?? 'unknown',
+      version: matchInfoField(serverText, 'version') ?? 'unknown',
+    }
+  } catch {
+    return { appendFsync: 'unknown', version: 'unknown' }
+  }
+}
+
+function matchInfoField(text, field) {
+  const line = text.split('\n').find((candidate) => candidate.startsWith(field + ':'))
+  if (line === undefined) return null
+  return line.slice(field.length + 1).trim()
+}
+
 function intOption(value, name, minimum, maximum, fallback) {
   const n = numberOption(value, name, minimum, fallback)
   if (!Number.isInteger(n) || n > maximum) {
@@ -80,6 +104,7 @@ export async function runBenchmark(options = {}) {
   const ClientClass = o.clientClass === undefined ? await loadClientClass() : o.clientClass
 
   const startedAtISO = new Date().toISOString()
+  const serverMeta = await probeServer(ClientClass, { host, port })
   const mixTotal = setShare + getShare
   const stats = { totalOps: 0, opsFailed: 0, samples: [] }
 
@@ -208,6 +233,8 @@ export async function runBenchmark(options = {}) {
         valueSize,
         nodeVersion: process.version,
         platform: process.platform,
+        serverAppendFsync: serverMeta.appendFsync,
+        serverVersion: serverMeta.version,
       },
       durationSecondsActual,
       totalOps: stats.totalOps,
