@@ -184,18 +184,8 @@ async function main() {
     startedAtMs: Date.now(),
     lastSaveAtMs: 0,
   };
-
   buildRegistry(ctx);
   installDispatcher(ctx);
-  ctx.expandOutcomeRecords = (outcome) => {
-    if (outcome.restoreRecord !== undefined) {
-      const targetKey = outcome.restoreRecord[0].toString('latin1');
-      const entry = store.getEntry(targetKey);
-      outcome.mutations = entry !== null
-        ? [encodeEntryRecord(targetKey, entry, store.nowMs()).map((part) => Buffer.from(part, 'latin1'))]
-        : [['DEL', outcome.restoreRecord[0]]];
-    }
-  };
   ctx.infoRenderer = new InfoRenderer(ctx);
   ctx.snapshotWriter = new SnapshotWriter({ store, log: logger, snapPath });
   ctx.rewriter = new AofRewriter({ store, aof, log: logger, aofPath });

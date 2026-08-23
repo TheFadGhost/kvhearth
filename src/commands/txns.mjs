@@ -50,10 +50,6 @@ export function registerTransactionCommands(add) {
       }
       replies.push(outcome.reply);
       if (outcome.mutations && outcome.mutations.length > 0) collected.push(...outcome.mutations);
-      if (outcome.restoreRecord !== undefined) {
-        ctx.expandOutcomeRecords(outcome);
-        collected.push(...outcome.mutations);
-      }
     }
     clearWatches(ctx, conn);
     return { reply: array(replies), mutations: collected };

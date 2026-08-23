@@ -225,10 +225,14 @@ typed form, in execution order, plus `RESTORE` records produced by
 compaction. Recovery replays through the ordinary parser.
 
 Startup matrix:
-- AOF only: replay. Snapshot only: load. Neither: empty start.
-- Both: load snapshot, then replay the entire AOF — safe because every
-  logged record assigns absolute state, so replay over loaded state is
-  idempotent.
+- AOF present: replay it, regardless of any snapshot. The log alone is
+  authoritative; this is what makes delta commands (INCR, RPUSH, APPEND,
+  LPOP and friends) safe across restarts.
+- Snapshot only (log absent or empty): load it. Snapshots are
+  operator-managed backups, not restart accelerators - pairing the two
+  safely would require log truncation epochs, which this codebase
+  deliberately avoids.
+- Neither present: empty start.
 
 ### 4.2 Snapshot
 
@@ -237,7 +241,8 @@ typed form, footer `#END sha256=<hex> keys=<n>`, digest computed over all
 bytes between header end and footer start. Corrupt digest -> refuse to load
 (fail closed, exit code 12). Written by `SAVE` (synchronous), `BGSAVE`
 (chunked, non-blocking), and automatically at shutdown unless
-`save-on-shutdown no`.
+`save-on-shutdown no`. A snapshot is a backup: recovery prefers the
+append log whenever one exists (§4.1).
 
 `RESTORE key type ttl_abs_epoch_ms encoded` with type one of
 `string list hash set zset`; `encoded` is a nested typed-form payload holding

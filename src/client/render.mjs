@@ -73,6 +73,8 @@ function renderArrayLines(items, theme, depth) {
       for (let i = 1; i < childLines.length; i++) {
         lines.push(` `.repeat(depth * 3 + 3) + childLines[i]);
       }
+    } else if (item.kind === 'array') {
+      lines.push(`${prefix} ${theme.dim('(empty array)')}`);
     } else {
       lines.push(`${prefix} ${renderValue(item, theme)}`);
     }
@@ -80,7 +82,7 @@ function renderArrayLines(items, theme, depth) {
   return lines;
 }
 
-function renderValue(reply, theme) {
+function renderValue(reply, theme, depth = 0) {
   switch (reply.kind) {
     case 'simple':
       return reply.text;
@@ -92,6 +94,9 @@ function renderValue(reply, theme) {
       return renderBulkData(reply.data, theme);
     case 'nil-array':
       return theme.dim('(nil array)');
+    case 'array':
+      if (reply.items.length === 0) return theme.dim('(empty array)');
+      return renderArrayLines(reply.items, theme, depth).join('\n');
     case 'error':
       return `${theme.error('(error)')} ${theme.error(reply.code)} ${reply.text}`;
     default:

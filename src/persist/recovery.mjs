@@ -27,7 +27,32 @@ export function cleanStaleTemporaries(paths, log) {
 
 export function recover({ store, aofPath, snapPath, applyCommand, log }) {
   const result = new RecoveryResult();
-  let snapshotLoaded = false;
+
+  const aofStat = safeStat(aofPath);
+  const aofHasContent = aofStat.size > 0;
+  let replayableBytes = 0;
+
+  if (aofHasContent) {
+    const raw = fs.readFileSync(aofPath);
+    const firstNewline = raw.indexOf(0x0a);
+    const header = firstNewline === -1 ? '' : raw.toString('latin1', 0, firstNewline).trim();
+    if (header !== '' && header !== AOF_HEADER) {
+      const err = new Error(`append log '${aofPath}' has unrecognized header '${header}'`);
+      err.exitCode = 11;
+      throw err;
+    }
+    const startOffset = header === AOF_HEADER ? firstNewline + 1 : 0;
+    replayableBytes = raw.length - startOffset;
+    if (replayableBytes > 0) {
+      if (fs.existsSync(snapPath)) {
+        log.warn('snapshot present but ignored: the append log is authoritative', { file: snapPath });
+      }
+      const droppedTail = replayAofBytes(store, raw.subarray(startOffset), applyCommand, result);
+      result.truncatedTailBytes = droppedTail;
+      return result;
+    }
+    log.info('append log contains no records; checking for a snapshot', { file: aofPath });
+  }
 
   if (fs.existsSync(snapPath)) {
     const { body, declaredKeys } = parseSnapshotFile(snapPath);
@@ -36,27 +61,9 @@ export function recover({ store, aofPath, snapPath, applyCommand, log }) {
       log.warn('snapshot key count differs from footer', { declared: declaredKeys, applied: parsedCount });
     }
     result.snapshotKeys = parsedCount;
-    snapshotLoaded = true;
     log.info('snapshot loaded', { file: snapPath, keys: parsedCount });
   }
 
-  const aofExists = fs.existsSync(aofPath);
-  if (aofExists || !snapshotLoaded) {
-    const aofStat = safeStat(aofPath);
-    if (aofExists && aofStat.size > 0) {
-      const raw = fs.readFileSync(aofPath);
-      const firstNewline = raw.indexOf(0x0a);
-      const header = firstNewline === -1 ? '' : raw.toString('latin1', 0, firstNewline).trim();
-      if (header !== '' && header !== AOF_HEADER) {
-        const err = new Error(`append log '${aofPath}' has unrecognized header '${header}'`);
-        err.exitCode = 11;
-        throw err;
-      }
-      const startOffset = header === AOF_HEADER ? firstNewline + 1 : 0;
-      const droppedTail = replayAofBytes(store, raw.subarray(startOffset), applyCommand, result);
-      result.truncatedTailBytes = droppedTail;
-    }
-  }
   return result;
 }
 

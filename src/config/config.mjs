@@ -136,10 +136,18 @@ function coerce(key, spec, value, source) {
       return parseIntRange(key, value, spec.min, spec.max, source, SUFFIXES.b);
     case 'seconds': {
       const secondsValue = parseDurationToMs(value, key, source) / 1000;
-      return parseIntRange(key, String(secondsValue), spec.min, Infinity, source, 1);
+      if (secondsValue < spec.min) {
+        throw new ConfigError(`value out of range for '${key}': ${secondsValue} (allowed >= ${spec.min}; ${source})`);
+      }
+      return secondsValue;
     }
-    case 'micros':
-      return parseMicros(value, key, source);
+    case 'micros': {
+      const us = parseMicros(value, key, source);
+      if (us < spec.min) {
+        throw new ConfigError(`value out of range for '${key}': ${us} (allowed >= ${spec.min}; ${source})`);
+      }
+      return us;
+    }
     case 'enum':
       return parseEnum(key, value, spec.values, source);
     case 'notifyflags':

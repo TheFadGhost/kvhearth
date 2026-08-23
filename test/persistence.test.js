@@ -230,6 +230,22 @@ test('corrupt mid-file record refuses startup instead of loading partial history
   assert.match(probe.stderr, /corrupt/i);
 });
 
+test('delta commands apply exactly once across save and restart', async () => {
+  const s = await spawnServer({ args: { 'append-fsync': 'everysec' } });
+  const c = await client(s.port);
+  await c.cmd(['DEL', 'ctr']);
+  for (let i = 0; i < 3; i++) await c.cmd(['INCR', 'ctr']);
+  assert.equal((await c.cmd(['GET', 'ctr'])).data.toString(), '3');
+  await c.cmd(['SAVE']);
+  await c.destroy();
+  await s.killHard();
+
+  const s2 = await spawnServer({ dir: s.dataDir, args: { port: s.port } });
+  const c2 = await client(s2.port);
+  assert.equal((await c2.cmd(['GET', 'ctr'])).data.toString(), '3');
+  await c2.destroy();
+});
+
 test('SAVE snapshot plus later writes recovers exactly through combined load', async () => {
   const s = await spawnServer({ args: { 'append-fsync': 'everysec' } });
   const c = await client(s.port);
@@ -269,13 +285,15 @@ test('snapshot without any append log loads on its own', async () => {
   await c2.destroy();
 });
 
-test('corrupt snapshot digest refuses startup with exit code 12', async () => {
+test('corrupt snapshot digest refuses startup with exit code 12 when no log shadows it', async () => {
   const s = await spawnServer({ args: { 'append-fsync': 'never' } });
   const c = await client(s.port);
   await c.cmd(['SET', 'x', 'y']);
   await c.cmd(['SAVE']);
   await c.destroy();
   await s.killHard();
+
+  fs.rmSync(path.join(s.dataDir, 'kvhearth.aof'));
 
   const snapPath = path.join(s.dataDir, 'kvhearth.snap');
   const raw = fs.readFileSync(snapPath);

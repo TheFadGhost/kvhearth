@@ -151,12 +151,16 @@ Two files under `--dir` (default `./data`):
   chunked BGSAVE, or automatically at shutdown. Integrity-checked with a
   SHA-256 digest over the body; corrupt snapshots refuse to load.
 
-Startup: snapshot (if any) loads first, then the entire append log
-replays over it. Every logged record assigns absolute state, so replay is
-idempotent. A truncated final entry (crash mid-write) is detected and
-discarded; a corrupt record mid-file refuses startup rather than loading
-partial history. `node bin/kvhearth.mjs --check-aof FILE` reports on a
-log without starting anything.
+Startup: the append log is authoritative. If a log exists it is replayed
+alone (a snapshot alongside it is ignored, with a warning); if no log
+exists a snapshot is loaded on its own; with neither the server starts
+empty. Snapshots are operator-managed backups, not restart accelerators —
+pairing them with log replay would double-apply delta commands such as
+INCR, so this codebase deliberately refuses that design. A truncated
+final entry (crash mid-write) is detected and discarded; a corrupt record
+mid-file refuses startup rather than loading partial history.
+`node bin/kvhearth.mjs --check-aof FILE` reports on a log without
+starting anything.
 
 ### Durability guarantees, per fsync policy
 

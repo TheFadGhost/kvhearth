@@ -128,7 +128,7 @@ function handleSet(ctx, args) {
     mutations.push([
       'PEXPIREAT',
       args[1],
-      Buffer.from(String(resolveExpireAt(ctx, options)), 'latin1'),
+      Buffer.from(String(expireAtMs), 'latin1'),
     ]);
   }
   return { reply: simple('OK'), mutations };

@@ -1,5 +1,5 @@
 import { simple, bulk, integer, array } from '../proto/serializer.mjs';
-import { errCmd, ok, errSrv } from '../server/errors.mjs';
+import { errCmd, ok, errSrv, errArity } from '../server/errors.mjs';
 import { define, ReplySignal, bulkArray } from './util.mjs';
 import { latin } from './strings.mjs';
 import { writeSnapshotSync } from '../persist/snapshot.mjs';
@@ -82,7 +82,13 @@ export function registerServerCommands(add) {
   }));
 
   add(define('BGSAVE', { min: 0, max: 0 }, (ctx) => {
-    const outcome = ctx.snapshotWriter.start();
+    let outcome;
+    try {
+      outcome = ctx.snapshotWriter.start();
+    } catch (err) {
+      ctx.log.error('background snapshot failed to start', { error: err.message });
+      return { reply: errSrv(`BGSAVE failed (${err.code ?? err.message})`) };
+    }
     if (!outcome.ok && outcome.reason === 'busy') {
       return { reply: errCmd('BGSAVE', 'background save already in progress') };
     }
