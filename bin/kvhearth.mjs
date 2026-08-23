@@ -56,6 +56,8 @@ tools:
 all configuration keys are also accepted as --<key> VALUE flags:
 ${CONFIG_KEYS.map((k) => `  ${k}`).join('\n')}`;
 
+const BOOLEAN_FLAGS = new Set(['appendonly', 'save-on-shutdown', 'enable-debug-commands']);
+
 function parseArgv(argv) {
   const flags = {};
   const special = [];
@@ -71,6 +73,10 @@ function parseArgv(argv) {
     if (token === 'check-aof') {
       if (i + 1 >= argv.length) throw new ConfigError('--check-aof requires a file path');
       special.push(`check-aof:${argv[++i]}`);
+      continue;
+    }
+    if (BOOLEAN_FLAGS.has(token) && (i + 1 >= argv.length || argv[i + 1].startsWith('-'))) {
+      flags[token] = 'yes';
       continue;
     }
     if (i + 1 >= argv.length) throw new ConfigError(`flag '--${token}' requires a value`);
@@ -191,6 +197,39 @@ async function main() {
   });
   server.shutdown = wrapShutdown(server);
   ctx.server = server;
+
+  ctx.applyRuntimeConfig = (key, value) => {
+    const probeConfig = new Config(resolveConfig({ flags: { [key]: value } }));
+    switch (key) {
+      case 'maxmemory':
+        config.values.maxmemory = probeConfig.get('maxmemory');
+        break;
+      case 'maxmemory-policy':
+        config.values['maxmemory-policy'] = probeConfig.get('maxmemory-policy');
+        break;
+      case 'slowlog-slower-than':
+        config.values['slowlog-slower-than'] = probeConfig.get('slowlog-slower-than');
+        break;
+      case 'slowlog-max-len':
+        config.values['slowlog-max-len'] = probeConfig.get('slowlog-max-len');
+        ctx.slowlog.maxLen = probeConfig.get('slowlog-max-len');
+        break;
+      case 'requirepass':
+        config.values.requirepass = probeConfig.get('requirepass');
+        for (const conn of server.clients.values()) {
+          if (!conn.authed) conn.authed = false;
+        }
+        break;
+      case 'notify-keyspace-events':
+        config.values['notify-keyspace-events'] = probeConfig.get('notify-keyspace-events');
+        break;
+      case 'timeout':
+        config.values.timeout = probeConfig.get('timeout');
+        break;
+      default:
+        throw new Error(`'${key}' is not settable at runtime`);
+    }
+  };
 
   cleanStaleTemporaries({ aof: aofPath, snap: snapPath }, logger);
   if (aof instanceof AppendLog) aof.open();

@@ -1,5 +1,5 @@
 import { simple } from '../proto/serializer.mjs';
-import { errArity, errUnknownCommand, errCmd, errSrv } from './errors.mjs';
+import { errArity, errUnknownCommand, errCmd, errSrv, errOom } from './errors.mjs';
 import { isTxnControl, isSubscriberAllowed, wakeListWaiters } from '../commands/registry.mjs';
 import { encodeEntryRecord } from '../persist/snapshot.mjs';
 import { escapeInline } from '../proto/parser.mjs';
@@ -58,8 +58,14 @@ function executeCommand(ctx, conn, args) {
     conn.multi.queue.push(args);
     return { reply: simple('QUEUED') };
   }
-  if (command.meta.write && ctx.aof.degraded && ctx.txnMode === null) {
-    return { reply: errSrv(`${name}: persistence is degraded; writes refused until REWRITEAOF succeeds`) };
+  if (command.meta.write) {
+    const limit = ctx.config.get('maxmemory');
+    if (limit > 0 && !ctx.evictor.enforce()) {
+      return { reply: errOom(name, limit) };
+    }
+    if (ctx.aof.degraded && ctx.txnMode === null) {
+      return { reply: errSrv(`${name}: persistence is degraded; writes refused until REWRITEAOF succeeds`) };
+    }
   }
   const outcome = command.handler(ctx, conn, args);
   if (outcome && outcome.renameRecord !== undefined) {
@@ -79,7 +85,7 @@ function dispatchOnce(ctx, conn, args, options) {
     handlerThrew = err.reply;
     outcome = { reply: handlerThrew };
   } finally {
-    const durationMicros = Number(process.hrtime.bigint() - startedAtNs) / 1000;
+    const durationMicros = Math.round(Number(process.hrtime.bigint() - startedAtNs) / 1000);
     if (durationMicros >= ctx.config.get('slowlog-slower-than')) {
       ctx.slowlog.record(durationMicros, args, conn.addr ?? 'internal');
     }

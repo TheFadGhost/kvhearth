@@ -295,6 +295,27 @@ export class Store {
     return expired;
   }
 
+  sweepCandidates(count) {
+    const candidates = [];
+    if (this.map.size === 0) return candidates;
+    let skipped = Math.floor(Math.random() * this.map.size);
+    for (const [key, entry] of this.map) {
+      if (skipped > 0) {
+        skipped--;
+        continue;
+      }
+      if (candidates.length >= count) break;
+      candidates.push([key, entry]);
+    }
+    if (candidates.length < count) {
+      for (const [key, entry] of this.map) {
+        if (candidates.length >= count) break;
+        candidates.push([key, entry]);
+      }
+    }
+    return candidates;
+  }
+
   iterateFrom(startIndex, limit) {
     const items = [];
     let index = 0;

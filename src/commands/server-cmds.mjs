@@ -22,7 +22,7 @@ export function registerServerCommands(add) {
     if (required === '') {
       return { reply: errCmd('AUTH', 'no password is configured') };
     }
-    const supplied = args.length === 2 ? latin(args[2]) : latin(args[1]);
+    const supplied = args.length >= 3 ? latin(args[2]) : latin(args[1]);
     if (supplied === required) {
       conn.authed = true;
       return { reply: ok() };

@@ -17,7 +17,7 @@ export function registerStringCommands(add) {
       return { reply: bulk(value === null ? null : Buffer.from(value, 'latin1')) };
     })));
 
-  add(define('SET', { min: 2, max: -1 }, (ctx, conn, args) => handleSet(ctx, args)));
+  add(define('SET', { min: 2, max: -1, write: true }, (ctx, conn, args) => handleSet(ctx, args)));
 
   add(define('APPEND', { min: 2, max: 2, write: true }, (ctx, conn, args) =>
     guardTypes('append', args, () => {
