@@ -333,5 +333,5 @@ function fail(message, code) {
 
 main().catch((err) => {
   process.stderr.write(`kvhearth: fatal: ${err.stack ?? err.message}\n`);
-  process.exit(1);
+  process.exit(Number.isInteger(err.exitCode) ? err.exitCode : 1);
 });

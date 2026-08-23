@@ -24,10 +24,12 @@ export function freePort() {
 }
 
 export async function startServer(options = {}) {
-  const port = options.port ?? (await freePort());
+  const flagArgs = { ...(options.args ?? {}) };
+  const port = Number(options.port ?? flagArgs.port) || (await freePort());
+  delete flagArgs.port;
   const dataDir = options.dir ?? makeTempDir();
   const args = [path.join(root, 'bin', 'kvhearth.mjs'), '--port', String(port), '--dir', dataDir];
-  for (const [key, value] of Object.entries(options.args ?? {})) {
+  for (const [key, value] of Object.entries(flagArgs)) {
     if (value === true) args.push(`--${key}`);
     else args.push(`--${key}`, String(value));
   }
@@ -43,8 +45,18 @@ export async function startServer(options = {}) {
   proc.stdout.on('data', (chunk) => {
     stdout += chunk.toString();
   });
+  const exitInfo = { exited: false, code: null, signal: null };
+  proc.once('exit', (code, signal) => {
+    exitInfo.exited = true;
+    exitInfo.code = code;
+    exitInfo.signal = signal;
+  });
 
-  await waitForPort(port, options.readyTimeoutMs ?? 15000);
+  await waitForPort(port, options.readyTimeoutMs ?? 15000, () => ({
+    exited: exitInfo.exited,
+    code: exitInfo.code ?? exitInfo.signal,
+    stderr,
+  }));
 
   return {
     port,
@@ -69,7 +81,7 @@ export async function startServer(options = {}) {
   };
 }
 
-export async function waitForPort(port, timeoutMs) {
+export async function waitForPort(port, timeoutMs, getDiagnostics = null) {
   const deadline = Date.now() + timeoutMs;
   let lastError = null;
   while (Date.now() < deadline) {
@@ -78,10 +90,17 @@ export async function waitForPort(port, timeoutMs) {
       return;
     } catch (err) {
       lastError = err;
+      if (getDiagnostics) {
+        const extra = getDiagnostics();
+        if (extra && extra.exited) {
+          throw new Error(`server exited (code ${extra.code}) before becoming ready. stderr: ${extra.stderr}`);
+        }
+      }
       await sleep(120);
     }
   }
-  throw new Error(`server did not become ready on port ${port}: ${lastError?.message ?? 'timeout'}`);
+  const extra = getDiagnostics ? getDiagnostics() : null;
+  throw new Error(`server did not become ready on port ${port}: ${lastError?.message ?? 'timeout'}${extra ? ` stderr: ${extra.stderr}` : ''}`);
 }
 
 function probe(port) {
