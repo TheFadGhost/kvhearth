@@ -242,7 +242,8 @@ bytes between header end and footer start. Corrupt digest -> refuse to load
 (fail closed, exit code 12). Written by `SAVE` (synchronous), `BGSAVE`
 (chunked, non-blocking), and automatically at shutdown unless
 `save-on-shutdown no`. A snapshot is a backup: recovery prefers the
-append log whenever one exists (§4.1).
+append log whenever it has content (§4.1); a header-only empty log does
+not block snapshot load.
 
 `RESTORE key type ttl_abs_epoch_ms encoded` with type one of
 `string list hash set zset`; `encoded` is a nested typed-form payload holding

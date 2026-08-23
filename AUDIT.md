@@ -57,5 +57,42 @@ Auditor B (code paths): 19 findings (5 HIGH, 8 MED, 6 LOW).
 
 Round 1 fixes landed in commits following this file's introduction.
 Regression gate after fixes: full suite green, crash harness green,
-live fuzzer zero findings. Re-audit scheduled as Round 2; v1.0.0 is
-tagged only after a clean re-audit.
+live fuzzer zero findings.
+
+## Round 2
+
+Two verification auditors re-tested every Round 1 fix against the real
+binaries and swept for regressions.
+
+Design verdicts: 7 of 8 FIXED; A3 (nested empty array rendering) still
+broken, fixed in Round 2. New: NEW-1 negative slowlog-slower-than
+accepted (fixed), NEW-2 seconds-typed config rejected unit suffixes
+(fixed).
+
+Code verdicts: 12 of 13 FIXED; B8 half-broken via a missing errArity
+import (fixed). Two new HIGH findings, both release blockers:
+
+- N1 — snapshot + full-log replay double-applied delta commands
+  (INCR x3 then SAVE then restart yielded 6). Resolution: the startup
+  matrix was redesigned. The append log alone is authoritative; snapshots
+  are operator-managed backups loaded only when no log content exists.
+  DESIGN §4.1/§4.2 and README updated to state this. Regression test
+  added (delta commands apply exactly once across save and restart).
+- N2 — MULTI+STORE commands threw on a missing import inside EXEC,
+  mutating memory with nothing journaled. Fixed (import restored,
+  double-expansion branch removed); the per-element catch now bounds any
+  future throw to an error element.
+
+Also fixed in Round 2 follow-up: BGSAVE failures named instead of SRV
+internal, SET deadline computed once for store and journal.
+
+Regression gate after Round 2 fixes: 198/198 suite green; crash harness
+12 rounds fsync=always acked=32412 verified=32412 OK.
+
+## Outcome status
+
+Round 3 re-audit verdict: **CLEAN** — zero blocking findings. One LOW
+doc-wording nit (§4.2 'whenever one exists' -> 'whenever it has content')
+fixed in the same commit as this entry. v1.0.0 tagged after this verdict
+with the full regression gate green: 198/198 suite, crash harness OK,
+live fuzzer zero findings.
