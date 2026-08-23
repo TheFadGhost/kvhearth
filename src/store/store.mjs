@@ -120,7 +120,8 @@ export class Store {
     this.usedBytes = 0;
     this.accessCounter = 0;
     this.expirerCursor = 0;
-    this.stats = { expired: 0, evicted: 0 };
+    this.stats = { expired: 0, evicted: 0, hits: 0, misses: 0 };
+    this.internalMode = false;
     this.onExpire = null;
     this.onEvict = null;
   }
@@ -154,13 +155,16 @@ export class Store {
 
   getEntry(key) {
     const entry = this.map.get(key);
-    if (entry === undefined) return null;
-    if (isExpiredAt(entry, this.nowMs())) {
-      this.removeEntry(key, entry);
-      this.stats.expired += 1;
-      if (this.onExpire) this.onExpire(key);
+    if (entry === undefined || isExpiredAt(entry, this.nowMs())) {
+      if (entry !== undefined) {
+        this.removeEntry(key, entry);
+        this.stats.expired += 1;
+        if (this.onExpire) this.onExpire(key);
+      }
+      if (!this.internalMode) this.stats.misses += 1;
       return null;
     }
+    if (!this.internalMode) this.stats.hits += 1;
     return entry;
   }
 
