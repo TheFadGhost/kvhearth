@@ -7,7 +7,7 @@ const POP_VERB = { left: 'LPOP', right: 'RPOP' };
 
 export function registerBlockingListCommands(add) {
   for (const [verb, side] of [['BLPOP', 'left'], ['BRPOP', 'right']]) {
-    add(define(verb, { min: 2, max: -1 }, (ctx, conn, args) =>
+    add(define(verb, { min: 2, max: -1, blocking: true }, (ctx, conn, args) =>
       guardTypes(verb.toLowerCase(), args, () => blockingPop(ctx, conn, args, verb, side))));
   }
 }

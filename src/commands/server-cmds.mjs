@@ -1,6 +1,6 @@
 import { simple, bulk, integer, array } from '../proto/serializer.mjs';
 import { errCmd, ok, errSrv } from '../server/errors.mjs';
-import { define, ReplySignal } from './util.mjs';
+import { define, ReplySignal, bulkArray } from './util.mjs';
 import { latin } from './strings.mjs';
 import { writeSnapshotSync } from '../persist/snapshot.mjs';
 
@@ -51,7 +51,7 @@ export function registerServerCommands(add) {
   }));
 
   add(define('COMMANDS', { min: 0, max: 0 }, (ctx) => ({
-    reply: array([...ctx.registry.keys()].sort().map((name) => Buffer.from(name, 'latin1'))),
+    reply: bulkArray([...ctx.registry.keys()].sort().map((name) => Buffer.from(name, 'latin1'))),
   })));
 
   add(define('FLUSHALL', { min: 0, max: 1, write: true }, (ctx, conn, args) => {

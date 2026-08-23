@@ -20,6 +20,10 @@ function executeCommand(ctx, conn, args) {
   const name = canonicalName(args);
   const command = ctx.registry.get(name);
   if (command === undefined) {
+    if (conn.multi !== null && !isTxnControl(name)) {
+      conn.multi.aborted = `unknown command '${name.toLowerCase()}'`;
+      return { reply: errUnknownCommand(name.toLowerCase()) };
+    }
     return { reply: errUnknownCommand(name.toLowerCase()) };
   }
   const argCount = args.length - 1;
@@ -29,6 +33,10 @@ function executeCommand(ctx, conn, args) {
       : command.meta.min === command.meta.max
         ? command.meta.min
         : `${command.meta.min}..${command.meta.max}`;
+    if (conn.multi !== null && !isTxnControl(name)) {
+      conn.multi.aborted = `wrong number of arguments for '${name}'`;
+      return { reply: errArity(name, expectation, argCount) };
+    }
     return { reply: errArity(name, expectation, argCount) };
   }
   if (ctx.config.get('requirepass') !== '' && !conn.authed && name !== 'AUTH' && name !== 'QUIT' && name !== 'RESET') {

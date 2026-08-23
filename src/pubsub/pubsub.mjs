@@ -161,6 +161,12 @@ export class PubSubHub {
     return hit.size;
   }
 
+  countsFor(connId) {
+    const rec = this.conns.get(connId);
+    if (!rec) return { channels: new Set(), patterns: new Set() };
+    return { channels: new Set(rec.exact), patterns: new Set(rec.patterns) };
+  }
+
   drop(connId) {
     const rec = this.conns.get(connId);
     if (!rec) {

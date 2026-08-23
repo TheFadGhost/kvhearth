@@ -1,6 +1,6 @@
 import { simple, bulk, integer, array } from '../proto/serializer.mjs';
 import { errCmd } from '../server/errors.mjs';
-import { define, ReplySignal } from './util.mjs';
+import { define, ReplySignal, bulkArray } from './util.mjs';
 import { latin } from './strings.mjs';
 
 const SUBSCRIBER_ALLOWED = new Set([
@@ -73,13 +73,16 @@ export function registerPubsubCommands(add) {
     return { reply: integer(receivers), mutations: [] };
   }));
 
-  add(define('PUBSUB', { min: 2, max: -1 }, (ctx, conn, args) => {
+  add(define('PUBSUB', { min: 1, max: -1 }, (ctx, conn, args) => {
+    if (args.length < 2) {
+      throw new ReplySignal(errCmd('PUBSUB', 'a subcommand is required (CHANNELS, NUMSUB, NUMPAT)'));
+    }
     const sub = latin(args[1]).toUpperCase();
     if (sub === 'CHANNELS') {
       const pattern = args.length > 2 ? latin(args[2]) : null;
       let channels = ctx.pubsub.channelsWithSubscribers();
       if (pattern !== null) channels = channels.filter((c) => ctx.glob(pattern, c));
-      return { reply: array(channels.map((c) => Buffer.from(c, 'latin1'))) };
+      return { reply: bulkArray(channels.map((c) => Buffer.from(c, 'latin1'))) };
     }
     if (sub === 'NUMSUB') {
       const channels = args.slice(2).map(latin);
@@ -107,12 +110,18 @@ export function publishMessage(ctx, channel, payload) {
   const deliver = (connId, matchedChannel, deliveredPayload, matchedPatternOrNull) => {
     const target = ctx.clients.get(connId);
     if (target === undefined) return;
-    const kind = matchedPatternOrNull === null ? 'message' : 'pmessage';
-    const frame = array([
-      simple(kind),
-      bulk(Buffer.from(matchedChannel, 'latin1')),
-      bulk(deliveredPayload),
-    ]);
+    const frame = matchedPatternOrNull === null
+      ? array([
+          simple('message'),
+          bulk(Buffer.from(matchedChannel, 'latin1')),
+          bulk(deliveredPayload),
+        ])
+      : array([
+          simple('pmessage'),
+          bulk(Buffer.from(matchedPatternOrNull, 'latin1')),
+          bulk(Buffer.from(matchedChannel, 'latin1')),
+          bulk(deliveredPayload),
+        ]);
     target.outbox.push(frame);
     ctx.server.flushConn(target);
     receivers += 1;
