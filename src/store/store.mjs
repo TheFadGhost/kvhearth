@@ -380,10 +380,9 @@ export class Store {
     let entry = existing;
     if (entry === null) entry = this.install(key, TYPE_LIST, []);
     const list = entry.value;
-    if (front) {
-      for (let i = items.length - 1; i >= 0; i--) list.unshift(items[i]);
-    } else {
-      for (const item of items) list.push(item);
+    for (const item of items) {
+      if (front) list.unshift(item);
+      else list.push(item);
     }
     this.replaceValue(key, entry, list);
     return list.length;

@@ -33,7 +33,7 @@ export function registerStringCommands(add) {
 
   for (const [verb, deltaSign] of [['INCR', 1n], ['DECR', -1n]]) {
     add(define(verb, { min: 1, max: 1, write: true }, (ctx, conn, args) =>
-      counterOp(ctx, 'incr', args, deltaSign)));
+      counterOp(ctx, args, deltaSign)));
   }
   for (const [verb, deltaSign] of [['INCRBY', 1n], ['DECRBY', -1n]]) {
     add(define(verb, { min: 2, max: 2, write: true }, (ctx, conn, args) => {
@@ -41,7 +41,7 @@ export function registerStringCommands(add) {
       if (parsed === null || parsed === undefined) {
         return { reply: errCmd('INCRBY', `value is not an integer or out of range (${latin(args[2])})`) };
       }
-      return counterOp(ctx, verb.toLowerCase(), args, deltaSign * parsed);
+      return counterOp(ctx, args, deltaSign * parsed);
     }));
   }
 
@@ -80,8 +80,8 @@ export function registerStringCommands(add) {
     })));
 }
 
-function counterOp(ctx, verbName, args, delta) {
-  return guardTypes(verbName, args, () => {
+function counterOp(ctx, args, delta) {
+  return guardTypes(args[0].toString('latin1').toLowerCase(), args, () => {
     try {
       const read = ctx.store.counterRead(latin(args[1]));
       const current = read.missing ? 0n : read.value;

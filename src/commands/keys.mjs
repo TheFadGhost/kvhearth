@@ -162,22 +162,32 @@ function scanCommand(ctx, conn, args) {
   let index = startIndex;
   let nextIndex = 0;
   let scanned = 0;
-  while (scanned < Math.max(countHint * 8, countHint)) {
+  const scanBudget = Math.max(countHint * 8, countHint);
+  for (;;) {
     const page = ctx.store.iterateFrom(index, countHint);
-    for (const [key, entry] of page.items) {
+    let offset = 0;
+    for (; offset < page.items.length; offset++) {
       scanned++;
+      const [key, entry] = page.items[offset];
       if (typeFilter !== null && entry.type !== typeFilter) continue;
       if (matchPattern !== null && !glob(matchPattern, key)) continue;
       collected.push(Buffer.from(key, 'latin1'));
       if (collected.length >= countHint) break;
     }
+    if (offset < page.items.length) {
+      nextIndex = index + offset + 1;
+      break;
+    }
     if (page.nextIndex === 0) {
       nextIndex = 0;
       break;
     }
+    if (scanned >= scanBudget) {
+      nextIndex = page.nextIndex;
+      break;
+    }
     index = page.nextIndex;
     nextIndex = index;
-    if (collected.length >= countHint) break;
   }
   return {
     reply: array([bulk(Buffer.from(String(nextIndex), 'latin1')), bulkArray(collected)]),

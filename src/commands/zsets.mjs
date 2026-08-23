@@ -37,7 +37,7 @@ export function registerZsetCommands(add) {
       let count = 0;
       if (view !== null) {
         for (const [, score] of view) {
-          if (boundContains(min, score) && boundContains(max, score)) count++;
+          if (boundContains(min, score) && boundContains(max, score, true)) count++;
         }
       }
       return { reply: integer(count) };
@@ -115,19 +115,11 @@ function zaddCommand(ctx, args) {
     pairs.push([latin(rest[i + 1]), score]);
   }
   const { added, changed } = ctx.store.zsetAdd(latin(args[1]), pairs, { nx, xx, ch });
-  const canonicalPairs = nx || xx
-    ? pairs.filter(([member]) => {
-        const score = ctx.store.zsetScore(latin(args[1]), member);
-        return score !== undefined;
-      })
-    : pairs;
   const record = ['ZADD', args[1]];
-  if (nx) record.push('NX');
-  if (xx) record.push('XX');
-  if (ch) record.push('CH');
-  for (const [member, score] of canonicalPairs) record.push(Buffer.from(formatScore(score), 'latin1'), Buffer.from(member, 'latin1'));
-  void changed;
-  return { reply: integer(added), mutations: [record] };
+  for (const [member, score] of pairs) {
+    record.push(Buffer.from(formatScore(score), 'latin1'), Buffer.from(member, 'latin1'));
+  }
+  return { reply: integer(ch ? changed : added), mutations: [record] };
 }
 
 function requireArityError(cmd) {
@@ -159,10 +151,10 @@ function zrangeByScore(ctx, args, reverse) {
     position++;
   }
   const view = ctx.store.zsetSortedView(latin(args[1]));
-  if (view === null) return { reply: nilArray() };
+  if (view === null) return { reply: array([]) };
   const matched = [];
   for (const [member, score] of view) {
-    if (boundContains(min, score) && boundContains(max, score)) matched.push([member, score]);
+    if (boundContains(min, score) && boundContains(max, score, true)) matched.push([member, score]);
   }
   const ordered = reverse ? [...matched].reverse() : matched;
   const slice = count < 0 ? ordered.slice(offset) : ordered.slice(offset, offset + Math.max(count, 0));
@@ -199,7 +191,11 @@ export function parseBound(cmd, name, argBuffer) {
   return { value, exclusive };
 }
 
-export function boundContains(bound, score) {
+export function boundContains(bound, score, isMax = false) {
+  if (isMax) {
+    if (bound.exclusive) return score < bound.value;
+    return score <= bound.value;
+  }
   if (bound.exclusive) return score > bound.value;
   return score >= bound.value;
 }

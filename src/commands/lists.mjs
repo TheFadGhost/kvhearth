@@ -54,12 +54,11 @@ export function registerListCommands(add) {
 function pushCommand(ctx, args, verb, front) {
   requireArgCount(verb, args, 2);
   const key = latin(args[1]);
-  const newLength = ctx.store.listPush(key, args.slice(2).map(latin), front);
   const positional = args.slice(2);
-  const canonicalItems = front ? [...positional].reverse() : positional;
+  const newLength = ctx.store.listPush(key, positional.map(latin), front);
   return {
     reply: integer(newLength),
-    mutations: [[verb, args[1], ...canonicalItems]],
+    mutations: [[verb, args[1], ...positional]],
     pushedKey: args[1],
     pushedSide: front ? 'left' : 'right',
   };
