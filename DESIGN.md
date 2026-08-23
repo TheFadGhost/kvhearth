@@ -104,10 +104,11 @@ $1
 $1
 3
 # a comment line produces no reply; blank lines neither
-%2
+%4
 4 HSET
 1 h
-1 x
+1 f
+1 v
 :1
 ```
 
@@ -125,7 +126,7 @@ set: `PROTO`, `ERR`, `WRONGTYPE`, `RANGE`, `OOM`, `SRV`.
 - Server error — `SRV`: the server failed (disk, fsync, limits), not the client.
 
 Message shape rule: every command-level error begins with the CODE, then the
-command name, then a colon-space and a lowercase human message; when an
+command name, then a single space and a lowercase human message; when an
 argument is at fault the message names it (position or option letter). The
 shape is identical for every command; no command invents its own layout.
 
@@ -316,9 +317,14 @@ by state hashing in tests.
 - Accounting is an explicit documented estimate: per-entry overhead + key + 
   value bytes recursively. `maxmemory 0` disables enforcement.
 - Policies: `noeviction` (default; `-OOM` on refused writes) and
-  `allkeys-lru` — approximate LRU, sample 16 random entries, evict least
+  `allkeys-lru` - approximate LRU, sample 16 random entries, evict least
   recently touched, repeat until under limit or nothing evictable.
+  Evictions are journaled as `DEL` records so replay stays consistent.
   Approximation stated; reads always succeed regardless of policy.
+  Overshoot window: a single write larger than the remaining headroom is
+  admitted before the limit trips (enforcement runs before the mutation,
+  which cannot know the value size in advance); the next mutation is
+  refused. This bounds overshoot at one entry.
 
 ## 8. Server operations
 
@@ -363,7 +369,7 @@ Log formats (fields fixed once):
 - json: `{"ts":"...","level":"info","msg":"listening","address":"..."}`,
   same vocabulary.
 
-INFO layout: `# Section` headers; `name:` padded left to column 24; numeric
+INFO layout: `# Section` headers; `name:` padded left to column 30; numeric
 values right-aligned fixed 12-column tabular zone, no separators (no jitter);
 sections Server, Clients, Memory, Stats, Keyspace, Persistence, Eviction;
 derived hit rate beside hits/misses; nothing important buried in prose.

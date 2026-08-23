@@ -16,7 +16,7 @@ Requires Node.js 20 or newer. No dependencies:
 ```
 git clone https://github.com/TheFadGhost/kvhearth.git
 cd kvhearth
-npm test          # optional: run the suite (181 tests)
+npm test          # optional: run the suite (197 tests)
 node bin/kvhearth.mjs
 ```
 
