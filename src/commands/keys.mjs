@@ -105,7 +105,7 @@ function expireRelative(ctx, args, verb, unitMultiplier) {
     const deadline = ctx.store.nowMs() + seconds * unitMultiplier;
     const applied = ctx.store.setExpireMs(key, deadline);
     reply = integer(applied ? 1 : 0);
-    if (applied) mutations = [[verb.toUpperCase(), args[1], String(seconds)]];
+    if (applied) mutations = [['PEXPIREAT', args[1], Buffer.from(String(deadline), 'latin1')]];
   }
   return { reply, mutations };
 }
@@ -154,7 +154,7 @@ function scanCommand(ctx, conn, args) {
   }
   const startIndex = Number(cursorText);
   if (!Number.isSafeInteger(startIndex)) {
-    throw new ReplySignal(errCmd('SCAN', `cursor out of range '${cursorText}'`));
+    throw new ReplySignal(errRange('SCAN', 'cursor', `out of supported range '${cursorText}'`));
   }
   void conn;
   const glob = ctx.glob;

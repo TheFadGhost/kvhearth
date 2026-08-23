@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { RequestParser } from '../proto/parser.mjs';
 import { AOF_HEADER } from './aof.mjs';
-import { parseSnapshotFile, SnapshotError } from './snapshot.mjs';
+import { parseSnapshotFile } from './snapshot.mjs';
 import { applyRestore } from './restore.mjs';
 
 export class RecoveryResult {
@@ -30,20 +30,14 @@ export function recover({ store, aofPath, snapPath, applyCommand, log }) {
   let snapshotLoaded = false;
 
   if (fs.existsSync(snapPath)) {
-    try {
-      const { body, declaredKeys } = parseSnapshotFile(snapPath);
-      const parsedCount = replaySnapshotBody(store, body);
-      if (parsedCount !== declaredKeys) {
-        log.warn('snapshot key count differs from footer', { declared: declaredKeys, applied: parsedCount });
-      }
-      result.snapshotKeys = parsedCount;
-      snapshotLoaded = true;
-      log.info('snapshot loaded', { file: snapPath, keys: parsedCount });
-    } catch (err) {
-      if (err instanceof SnapshotError && err.code === 12) throw err;
-      if (err instanceof SnapshotError) throw err;
-      throw err;
+    const { body, declaredKeys } = parseSnapshotFile(snapPath);
+    const parsedCount = replaySnapshotBody(store, body);
+    if (parsedCount !== declaredKeys) {
+      log.warn('snapshot key count differs from footer', { declared: declaredKeys, applied: parsedCount });
     }
+    result.snapshotKeys = parsedCount;
+    snapshotLoaded = true;
+    log.info('snapshot loaded', { file: snapPath, keys: parsedCount });
   }
 
   const aofExists = fs.existsSync(aofPath);
@@ -66,8 +60,14 @@ export function recover({ store, aofPath, snapPath, applyCommand, log }) {
   return result;
 }
 
+const REPLAY_PARSER_LIMITS = {
+  maxArgs: Number.MAX_SAFE_INTEGER,
+  maxBulk: Number.MAX_SAFE_INTEGER,
+  maxRequest: Number.MAX_SAFE_INTEGER,
+};
+
 function replaySnapshotBody(store, body) {
-  const parser = new RequestParser();
+  const parser = new RequestParser(REPLAY_PARSER_LIMITS);
   const chunks = splitForParser(body);
   let count = 0;
   for (const chunk of chunks) {
@@ -86,7 +86,7 @@ function replaySnapshotBody(store, body) {
 }
 
 function replayAofBytes(store, bytes, applyCommand, result) {
-  const parser = new RequestParser();
+  const parser = new RequestParser(REPLAY_PARSER_LIMITS);
   let consumed = 0;
   const CHUNK = 1 << 16;
   while (consumed < bytes.length) {

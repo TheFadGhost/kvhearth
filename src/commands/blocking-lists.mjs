@@ -33,7 +33,10 @@ function blockingPop(ctx, conn, args, verb, side) {
     }
   }
   const waiter = ctx.blocking.register(conn, keys, side);
-  const timeoutMs = timeoutSeconds === 0 ? null : Math.max(Math.round(timeoutSeconds * 1000), 1);
+  const MAX_TIMEOUT_MS = 2147483647;
+  const timeoutMs = timeoutSeconds === 0
+    ? null
+    : Math.min(Math.max(Math.round(timeoutSeconds * 1000), 1), MAX_TIMEOUT_MS);
   if (timeoutMs !== null) {
     ctx.blocking.attachTimer(waiter, timeoutMs, (timedOut) => {
       deliverTimeout(ctx, timedOut);

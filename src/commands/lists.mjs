@@ -80,7 +80,7 @@ function popCommand(ctx, args, verb, front) {
   if (popped.length === 0) return { reply: bulkArray([]) };
   return {
     reply: bulkArray(popped.map((v) => Buffer.from(v, 'latin1'))),
-    mutations: [[verb, args[1]]],
+    mutations: [[verb, args[1], args[2]]],
     poppedKey: args[1],
   };
 }

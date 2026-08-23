@@ -135,7 +135,7 @@ test('MONITOR streams executed commands of other connections', async () => {
 
 test('SLOWLOG records commands exceeding the threshold', async () => {
   const s = await spawnServer({
-    args: { 'append-fsync': 'always', 'slowlog-slower-than': 1 },
+    args: { 'append-fsync': 'always', 'slowlog-slower-than': '1us' },
   });
   const c = await client(s.port);
   await c.cmd(['CONFIG', 'SET', 'slowlog-slower-than', '1']);

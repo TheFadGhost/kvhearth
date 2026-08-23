@@ -71,6 +71,9 @@ function executeCommand(ctx, conn, args) {
   if (outcome && outcome.renameRecord !== undefined) {
     expandRename(ctx, outcome);
   }
+  if (outcome && outcome.restoreRecord !== undefined) {
+    expandRestoreRecord(ctx, outcome);
+  }
   return outcome;
 }
 
@@ -94,21 +97,44 @@ function dispatchOnce(ctx, conn, args, options) {
   ctx.stats.commandsProcessed += 1;
   ctx.opsWindow.tick();
 
+  if (!options.tap) {
+    if (outcome.reply !== null && !conn.blocked) {
+      conn.outbox.push(outcome.reply);
+    }
+    return outcome;
+  }
+
+  let appendFailed = false;
+  if (outcome.mutations && outcome.mutations.length > 0) {
+    try {
+      emitMutations(ctx, outcome.mutations);
+    } catch (err) {
+      appendFailed = true;
+      outcome.reply = errSrv('write not durable: the append log rejected this command');
+    }
+  }
+
   if (outcome.reply !== null && !conn.blocked) {
     conn.outbox.push(outcome.reply);
   }
-  if (!options.tap) return outcome;
-
-  if (outcome.mutations && outcome.mutations.length > 0) {
-    emitMutations(ctx, outcome.mutations);
-  }
-  if (outcome.pushedKey) {
+  if (!appendFailed && outcome.pushedKey) {
     wakeListWaiters(ctx, outcome.pushedKey.toString('latin1'));
   }
   if (ctx.monitors.size > 0 && !conn.monitoring) {
     streamMonitor(ctx, conn, args);
   }
   return outcome;
+}
+
+function expandRestoreRecord(ctx, outcome) {
+  const targetKey = outcome.restoreRecord[0];
+  const entry = ctx.store.getEntry(targetKey.toString('latin1'));
+  if (entry !== null) {
+    outcome.mutations = [encodeEntryRecord(targetKey.toString('latin1'), entry, ctx.store.nowMs())
+      .map((part) => Buffer.from(part, 'latin1'))];
+  } else {
+    outcome.mutations = [['DEL', targetKey]];
+  }
 }
 
 export function emitMutations(ctx, records) {

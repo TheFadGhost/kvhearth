@@ -11,7 +11,7 @@ import {
   CONFIG_KEYS,
 } from '../src/config/config.mjs';
 import { Store } from '../src/store/store.mjs';
-import { AppendLog, NullAppendLog, AOF_HEADER } from '../src/persist/aof.mjs';
+import { AppendLog, NullAppendLog } from '../src/persist/aof.mjs';
 import { SnapshotWriter } from '../src/persist/snapshot-writer.mjs';
 import { cleanStaleTemporaries, recover } from '../src/persist/recovery.mjs';
 import { applyRestore } from '../src/persist/restore.mjs';
@@ -187,6 +187,15 @@ async function main() {
 
   buildRegistry(ctx);
   installDispatcher(ctx);
+  ctx.expandOutcomeRecords = (outcome) => {
+    if (outcome.restoreRecord !== undefined) {
+      const targetKey = outcome.restoreRecord[0].toString('latin1');
+      const entry = store.getEntry(targetKey);
+      outcome.mutations = entry !== null
+        ? [encodeEntryRecord(targetKey, entry, store.nowMs()).map((part) => Buffer.from(part, 'latin1'))]
+        : [['DEL', outcome.restoreRecord[0]]];
+    }
+  };
   ctx.infoRenderer = new InfoRenderer(ctx);
   ctx.snapshotWriter = new SnapshotWriter({ store, log: logger, snapPath });
   ctx.rewriter = new AofRewriter({ store, aof, log: logger, aofPath });
@@ -197,6 +206,15 @@ async function main() {
   });
   server.shutdown = wrapShutdown(server);
   ctx.server = server;
+
+  store.onEvict = (key) => {
+    if (store.internalMode || ctx.txnMode !== null) return;
+    try {
+      ctx.emitMutations([['DEL', Buffer.from(key, 'latin1')]]);
+    } catch (err) {
+      logger.error('failed to journal eviction', { key: key.replace(/[^\x20-\x7e]/g, '?'), error: err.message });
+    }
+  };
 
   ctx.applyRuntimeConfig = (key, value) => {
     const probeConfig = new Config(resolveConfig({ flags: { [key]: value } }));
@@ -216,9 +234,6 @@ async function main() {
         break;
       case 'requirepass':
         config.values.requirepass = probeConfig.get('requirepass');
-        for (const conn of server.clients.values()) {
-          if (!conn.authed) conn.authed = false;
-        }
         break;
       case 'notify-keyspace-events':
         config.values['notify-keyspace-events'] = probeConfig.get('notify-keyspace-events');
@@ -247,6 +262,10 @@ async function main() {
       }
       const pseudoConn = recoveryPseudoConn();
       ctx.dispatchCore(pseudoConn, args);
+      pseudoConn.outbox.length = 0;
+      if (store.usedBytes > 64 * 1024 * 1024 * 1024) {
+        logger.warn('recovery memory guard tripped');
+      }
     },
     log: logger,
   });
@@ -327,7 +346,6 @@ function checkAof(filePath) {
     process.stderr.write(`check-aof: cannot read '${filePath}': ${err.code ?? err.message}\n`);
     process.exit(2);
   }
-  void AOF_HEADER;
   import('../src/proto/parser.mjs').then(async ({ RequestParser }) => {
     const newlineAt = raw.indexOf(0x0a);
     if (newlineAt === -1) {

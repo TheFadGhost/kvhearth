@@ -1,5 +1,5 @@
 import { simple, array, nilArray } from '../proto/serializer.mjs';
-import { errCmd, ok } from '../server/errors.mjs';
+import { errCmd, ok, errSrv } from '../server/errors.mjs';
 import { define } from './util.mjs';
 import { latin } from './strings.mjs';
 
@@ -35,9 +35,25 @@ export function registerTransactionCommands(add) {
     const collected = [];
     const replies = [];
     for (const queuedArgs of txn.queue) {
-      const outcome = ctx.executeCommand(conn, queuedArgs);
+      let outcome;
+      try {
+        outcome = ctx.executeCommand(conn, queuedArgs);
+      } catch (err) {
+        if (err.reply) outcome = { reply: err.reply };
+        else {
+          ctx.log.error('transaction element failed unexpectedly', {
+            command: queuedArgs[0]?.toString('latin1'),
+            error: err.stack ?? String(err),
+          });
+          outcome = { reply: errSrv('internal error executing command') };
+        }
+      }
       replies.push(outcome.reply);
       if (outcome.mutations && outcome.mutations.length > 0) collected.push(...outcome.mutations);
+      if (outcome.restoreRecord !== undefined) {
+        ctx.expandOutcomeRecords(outcome);
+        collected.push(...outcome.mutations);
+      }
     }
     clearWatches(ctx, conn);
     return { reply: array(replies), mutations: collected };

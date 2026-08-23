@@ -3,6 +3,7 @@ import { errCmd, errRange } from '../server/errors.mjs';
 import { define, guardTypes, parseIntArg, requireArgCount, ReplySignal, bulkArray } from './util.mjs';
 import { latin } from './strings.mjs';
 import { parseScore } from '../store/store.mjs';
+import { formatScore } from '../persist/snapshot.mjs';
 
 export function registerZsetCommands(add) {
   add(define('ZADD', { min: 3, max: -1, write: true }, (ctx, conn, args) =>
@@ -20,6 +21,9 @@ export function registerZsetCommands(add) {
       if (delta === null) throw new ReplySignal(errCmd('ZINCRBY', `value is not a valid float (${latin(args[2])})`));
       const member = latin(args[3]);
       const next = ctx.store.zsetIncrementBy(latin(args[1]), member, delta);
+      if (next === undefined) {
+        throw new ReplySignal(errCmd('ZINCRBY', 'increment would produce a non-finite score'));
+      }
       return {
         reply: bulk(Buffer.from(formatScore(next), 'latin1')),
         mutations: [['ZINCRBY', args[1], args[2], args[3]]],
@@ -141,6 +145,9 @@ function zrangeByScore(ctx, args, reverse) {
     if (flag === 'WITHSCORES') {
       withScores = true;
     } else if (flag === 'LIMIT') {
+      if (position + 2 >= args.length) {
+        throw new ReplySignal(errRange(cmd, 'LIMIT', 'requires an offset and a count'));
+      }
       offset = parseIntArg(cmd, args, position + 1, 'offset');
       count = parseIntArg(cmd, args, position + 2, 'count');
       if (offset < 0) throw new ReplySignal(errRange(cmd, 'offset', 'must be non-negative'));
@@ -170,11 +177,6 @@ function renderSlice(slice, withScores) {
   return bulkArray(flat);
 }
 
-export function formatScore(score) {
-  if (score === Infinity) return '+inf';
-  if (score === -Infinity) return '-inf';
-  return String(score);
-}
 
 export function parseBound(cmd, name, argBuffer) {
   const text = latin(argBuffer);

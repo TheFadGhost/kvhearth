@@ -205,12 +205,11 @@ export class RequestParser {
       if (count > this.maxArgs) {
         return this.fail('argument count exceeds proto-max-args (' + this.maxArgs + ')');
       }
-      if (count === 0) {
-        requests.push({ args: [] });
-      } else {
-        this.pendingRecords = count;
-        this.currentArgs = [];
+      if (count < 1 || !Number.isInteger(count)) {
+        return this.fail('typed request must declare at least one argument');
       }
+      this.pendingRecords = count;
+      this.currentArgs = [];
       return true;
     }
     const args = parseInlineLine(text);

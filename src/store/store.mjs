@@ -717,6 +717,7 @@ export class Store {
       return delta;
     }
     const next = existingScore + delta;
+    if (Number.isNaN(next)) return undefined;
     this.zsetAdd(key, [[member, next]], {});
     return next;
   }

@@ -52,7 +52,7 @@ const SPEC = {
   'slowlog-max-len': { type: 'int', min: 0, max: 100000 },
   'log-level': { type: 'enum', values: ['debug', 'info', 'warn', 'error'] },
   'log-format': { type: 'enum', values: ['text', 'json'] },
-  theme: { type: 'enum', values: ['dark', 'light'] },
+  theme: { type: 'enum', values: ['dark', 'light', 'plain'] },
   requirepass: { type: 'raw' },
   'notify-keyspace-events': { type: 'notifyflags' },
   'enable-debug-commands': { type: 'bool' },
@@ -134,10 +134,12 @@ function coerce(key, spec, value, source) {
       return parseIntRange(key, stripUnit(value), spec.min, spec.max, source, 1);
     case 'bytes':
       return parseIntRange(key, value, spec.min, spec.max, source, SUFFIXES.b);
-    case 'seconds':
-      return parseIntRange(key, convertTime(value), spec.min, Infinity, source, 1) / 1000;
+    case 'seconds': {
+      const secondsValue = parseDurationToMs(value, key, source) / 1000;
+      return parseIntRange(key, String(secondsValue), spec.min, Infinity, source, 1);
+    }
     case 'micros':
-      return Math.round(parseIntRange(key, convertTime(value), spec.min, Infinity, source, 1));
+      return parseMicros(value, key, source);
     case 'enum':
       return parseEnum(key, value, spec.values, source);
     case 'notifyflags':
@@ -181,6 +183,35 @@ function convertTime(text) {
   if (!match) return text;
   const unit = (match[2] || 'ms').toLowerCase();
   return String(Number(match[1]) * TIME_SUFFIXES[unit]);
+}
+
+function parseDurationToMs(text, key, source) {
+  const trimmed = String(text).trim();
+  const match = /^([+-]?\d+(?:\.\d+)?)(us|ms|s|m|h)?$/i.exec(trimmed);
+  if (!match) {
+    throw new ConfigError(`invalid duration for '${key}': '${text}' (${source})`);
+  }
+  const unit = (match[2] || 's').toLowerCase();
+  const multiplier = unit === 'us' ? 1 / 1000 : TIME_SUFFIXES[unit];
+  const ms = Number(match[1]) * multiplier;
+  if (!Number.isFinite(ms)) {
+    throw new ConfigError(`invalid duration for '${key}': '${text}' (${source})`);
+  }
+  return ms;
+}
+
+function parseMicros(text, key, source) {
+  const trimmed = String(text).trim();
+  const match = /^([+-]?\d+(?:\.\d+)?)(us|ms|s|m|h)?$/i.exec(trimmed);
+  if (!match) {
+    throw new ConfigError(`invalid duration for '${key}': '${text}' (${source})`);
+  }
+  const unit = (match[2] || 'us').toLowerCase();
+  const us = Number(match[1]) * TIME_SUFFIXES[unit] * 1000;
+  if (!Number.isSafeInteger(Math.round(us))) {
+    throw new ConfigError(`value out of range for '${key}': '${text}' (${source})`);
+  }
+  return Math.round(us);
 }
 
 function parseEnum(key, value, allowed, source) {

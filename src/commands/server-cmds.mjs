@@ -155,7 +155,11 @@ export function registerServerCommands(add) {
   add(define('CONFIG', { min: 2, max: -1 }, (ctx, conn, args) => configCommand(ctx, args)));
 
   add(define('INFO', { min: 0, max: 1 }, (ctx, conn, args) => {
+    const KNOWN_SECTIONS = ['server', 'clients', 'memory', 'stats', 'keyspace', 'persistence', 'eviction'];
     const section = args.length === 2 ? latin(args[1]).toLowerCase() : 'default';
+    if (section !== 'default' && !KNOWN_SECTIONS.includes(section)) {
+      throw new ReplySignal(errCmd('INFO', `unknown section '${latin(args[1])}'`));
+    }
     return { reply: bulk(Buffer.from(ctx.infoRenderer.render(section), 'latin1')) };
   }));
 
@@ -189,6 +193,7 @@ function clientCommand(ctx, conn, args) {
   }
   if (sub === 'KILL') {
     if (args.length >= 3 && latin(args[2]).toUpperCase() === 'ID') {
+      if (args.length < 4) throw new ReplySignal(errArity('CLIENT KILL', 'ID and a client id', args.length - 2));
       const targetId = Number(latin(args[3]));
       for (const target of ctx.clients.values()) {
         if (target.id === targetId) {

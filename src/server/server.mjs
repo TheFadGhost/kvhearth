@@ -2,7 +2,6 @@ import net from 'node:net';
 import { RequestParser } from '../proto/parser.mjs';
 import { errProto, errSrv } from './errors.mjs';
 import { BlockingRegistry } from './blocking.mjs';
-import { PersistenceError } from '../persist/aof.mjs';
 
 export class OpsWindow {
   constructor() {
@@ -58,7 +57,12 @@ export class Server {
     const saveIntervalMs = ctx.config.get('save-interval') * 1000;
     if (saveIntervalMs > 0) {
       this.intervals.push(setInterval(() => {
-        if (!ctx.snapshotWriter.running) ctx.snapshotWriter.start();
+        if (ctx.snapshotWriter.running) return;
+        try {
+          ctx.snapshotWriter.start();
+        } catch (err) {
+          ctx.log.warn('periodic snapshot failed to start', { error: err.message });
+        }
       }, saveIntervalMs));
     }
     this.intervals.push(setInterval(() => this.enforceIdleTimeout(), 1000));
@@ -97,6 +101,8 @@ export class Server {
       ctx.stats.rejectedConnections += 1;
       socket.write(errSrv(`maxclients reached (limit ${maxclients})`));
       socket.end();
+      const destroyTimer = setTimeout(() => socket.destroy(), 500);
+      if (typeof destroyTimer.unref === 'function') destroyTimer.unref();
       return;
     }
     socket.setNoDelay(true);
@@ -168,15 +174,11 @@ export class Server {
         try {
           this.ctx.dispatch(conn, args);
         } catch (err) {
-          if (err instanceof PersistenceError) {
-            conn.outbox.push(errSrv('persistence failure acknowledged; write NOT durable'));
-          } else {
-            this.ctx.log.error('command execution failed unexpectedly', {
-              command: args[0]?.toString('latin1'),
-              error: err.stack ?? String(err),
-            });
-            conn.outbox.push(errSrv('internal error executing command'));
-          }
+          this.ctx.log.error('command execution failed unexpectedly', {
+            command: args[0]?.toString('latin1'),
+            error: err.stack ?? String(err),
+          });
+          conn.outbox.push(errSrv('internal error executing command'));
         }
         this.touchedConns.add(conn);
       }
@@ -235,6 +237,14 @@ export class Server {
     this.ctx.log.info('shutdown initiated', { save: save ? 'yes' : 'no' });
 
     for (const timer of this.intervals) clearInterval(timer);
+
+    if (this.ctx.rewriter.running) {
+      this.ctx.rewriter.abort('shutdown');
+      this.ctx.aof.cancelRewriteBuffer();
+    }
+    if (this.ctx.snapshotWriter.running) {
+      this.ctx.snapshotWriter.abort('shutdown');
+    }
 
     for (const conn of this.clients.values()) {
       this.flushConn(conn);

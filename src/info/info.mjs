@@ -1,4 +1,4 @@
-const PAD_WIDTH = 24;
+const PAD_WIDTH = 30;
 const NUMBER_WIDTH = 12;
 
 function field(name) {

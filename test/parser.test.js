@@ -194,17 +194,17 @@ test('invalid escape sequences fatal', () => {
   assert.notEqual(danglingParser.feed(bytes('SET k "a\\\n')).fatal, null);
 });
 
-test('percent-zero request parses to empty args', () => {
+test('percent-zero request is a framing violation per the contract', () => {
   const parser = new RequestParser();
   const result = parser.feed(bytes('%0\n'));
-  assert.equal(result.fatal, null);
-  assert.deepEqual(result.requests, [{ args: [] }]);
+  assert.notEqual(result.fatal, null);
+  assert.match(result.fatal.message, /at least one argument/);
 });
 
 test('parser frames many sequential commands independently in one stream', () => {
   const parser = new RequestParser();
   const stream = bytes(
-    'PING\n%2\n1 a\n1 b\nSET x "q q"\n%0\n# note\n\nGET x\n%3\n3 SET\n1 y\n6 va\nlue\n',
+    'PING\n%2\n1 a\n1 b\nSET x "q q"\n# note\n\nGET x\n%3\n3 SET\n1 y\n6 va\nlue\n',
   );
   const result = parser.feed(stream);
   assert.equal(result.fatal, null);
@@ -212,7 +212,6 @@ test('parser frames many sequential commands independently in one stream', () =>
     { args: [bytes('PING')] },
     { args: [bytes('a'), bytes('b')] },
     { args: [bytes('SET'), bytes('x'), bytes('q q')] },
-    { args: [] },
     null,
     null,
     { args: [bytes('GET'), bytes('x')] },

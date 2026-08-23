@@ -52,7 +52,7 @@ function storeAlgebra(ctx, args, verb, op) {
   const sets = ctx.store.readSetsForAlgebra(args.slice(2).map(latin));
   const result = Array.from(op(sets));
   ctx.store.storeSet(destination, result);
-  return { reply: integer(result.length), mutations: [[verb, args[1], ...args.slice(2)]] };
+  return { reply: integer(result.length), mutations: [], restoreRecord: [args[1]] };
 }
 
 function intersect(sets) {

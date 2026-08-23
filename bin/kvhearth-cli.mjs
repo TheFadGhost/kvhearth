@@ -26,7 +26,15 @@ function parseArgs(argv) {
     switch (argv[i]) {
       case '--host': out.host = argv[++i]; break;
       case '--port': out.port = Number(argv[++i]); break;
-      case '--theme': out.theme = argv[++i]; break;
+      case '--theme': {
+        const value = argv[++i];
+        if (value !== 'dark' && value !== 'light' && value !== 'plain') {
+          process.stderr.write(`kvhearth-cli: invalid theme '${value}' (allowed: dark, light, plain)\n`);
+          process.exit(2);
+        }
+        out.theme = value;
+        break;
+      }
       case '--no-color': out.noColor = true; break;
       case '--eval': out.eval = argv[++i]; break;
       case '--version': console.log(`kvhearth-cli ${VERSION}`); process.exit(0);

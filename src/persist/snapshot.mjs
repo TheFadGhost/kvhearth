@@ -45,7 +45,7 @@ export function encodeEntryRecord(key, entry, nowMs) {
   return ['RESTORE', key, type, ttl, ...payloadArgs];
 }
 
-function formatScore(score) {
+export function formatScore(score) {
   if (score === Infinity) return '+inf';
   if (score === -Infinity) return '-inf';
   return String(score);

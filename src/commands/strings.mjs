@@ -120,11 +120,18 @@ function handleSet(ctx, args) {
   });
   if (result === 'skipped') return { reply: bulk(null) };
   const record = ['SET', args[1], args[2]];
-  if (options.expireSeconds !== undefined) record.push(options.expireFlag, args[options.expireValueIndex]);
   if (options.nx) record.push('NX');
   if (options.xx) record.push('XX');
   if (options.keepttl) record.push('KEEPTTL');
-  return { reply: simple('OK'), mutations: [record] };
+  const mutations = [record];
+  if (options.expireSeconds !== undefined) {
+    mutations.push([
+      'PEXPIREAT',
+      args[1],
+      Buffer.from(String(resolveExpireAt(ctx, options)), 'latin1'),
+    ]);
+  }
+  return { reply: simple('OK'), mutations };
 }
 
 function parseSetOptions(args) {
@@ -155,7 +162,11 @@ function parseSetOptions(args) {
         if (!Number.isSafeInteger(magnitude)) {
           return { errorReply: errRange('SET', flag.toLowerCase(), 'value out of supported range') };
         }
-        options.expireSeconds = flag === 'EX' ? magnitude * 1000 : magnitude;
+        const scaled = flag === 'EX' ? magnitude * 1000 : magnitude;
+        if (!Number.isSafeInteger(scaled)) {
+          return { errorReply: errRange('SET', flag.toLowerCase(), 'value out of supported range') };
+        }
+        options.expireSeconds = scaled;
         options.expireFlag = flag;
         options.expireValueIndex = position + 1;
         position++;
