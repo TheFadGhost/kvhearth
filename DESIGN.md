@@ -168,7 +168,28 @@ operating on it with another type's commands is `WRONGTYPE` and never mutates.
   accept `(x` exclusive syntax.
 - All counts, indices, lengths parse within ±2^53; beyond that is `RANGE`.
 
-### 2.1 Expiry
+### 2.1 Locked semantic decisions
+
+These were fixed during implementation and are binding:
+
+- `LPUSH k a b c` leaves the list as `[c b a]` (elements pushed head-first,
+  in argument order); the append log stores the original command, so replay
+  reproduces the identical order.
+- `LPOP`/`RPOP k count`: a negative `count` pops from the opposite end and
+  returns elements in pop order.
+- `ZADD ... CH` returns the number of members changed (added plus updated);
+  without `CH` it returns only the number added. Append-log records for
+  ZADD are stored as plain upserts so replays are idempotent regardless of
+  the flags used originally.
+- `ZRANGEBYSCORE`/`ZREVRANGEBYSCORE` on a missing key return an empty array
+  (same as `ZRANGE`), not a nil array.
+- `PUBLISH` returns the number of distinct connections that received at
+  least one delivery. A `pmessage` frame is `[pmessage, pattern, channel,
+  payload]`; `message` is `[message, channel, payload]`.
+- Tab characters inside bulk values render literally in the CLI; other
+  control bytes switch the value to its escaped representation.
+
+### 2.2 Expiry
 
 - Millisecond resolution internally. Commands: `EXPIRE key seconds`,
   `PEXPIRE key ms`, `EXPIREAT`, `PEXPIREAT`, `TTL`, `PTTL`, `PERSIST`,
